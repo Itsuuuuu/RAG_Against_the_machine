@@ -216,3 +216,20 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# macOS
+.DS_Store
+
+# Corpus fourni, index et sorties : le sujet interdit de versionner les
+# gros fichiers de donnees, les poids de modeles et les sorties generees.
+# Le correcteur dezippe lui-meme vllm-0.10.1 et les datasets prives.
+data/raw/
+data/processed/
+data/output/
+
+# Notes de travail, hors rendu
+notes/
+
+# Fichiers de travail, hors rendu
+TODO.md
+src/sandbox.py
