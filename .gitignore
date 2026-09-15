@@ -228,8 +228,6 @@ data/processed/
 data/output/
 
 # Notes de travail, hors rendu
-notes/
 
 # Fichiers de travail, hors rendu
 TODO.md
-src/sandbox.py

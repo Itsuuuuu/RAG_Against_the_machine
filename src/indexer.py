@@ -24,30 +24,35 @@ STOPWORDS = frozenset([
     "this", "that",
     ])
 
-def create_md_chunker(max_chunk_size: int):
+
+def create_md_chunker(max_chunk_size: int) -> RecursiveChunker:
     chunker = RecursiveChunker(
-            tokenizer = "character",
-            chunk_size = max_chunk_size,
-            rules = RecursiveRules(),
-            min_characters_per_chunk =24,
-        )
+        tokenizer="character",
+        chunk_size=max_chunk_size,
+        rules=RecursiveRules(),
+        min_characters_per_chunk=24,
+    )
     return chunker
 
-def create_py_chunker(max_chunk_size: int):
+
+def create_py_chunker(max_chunk_size: int) -> CodeChunker:
     chunker = CodeChunker(
-            language="python",
-            tokenizer="character",
-            chunk_size= max_chunk_size,
-            include_nodes=False
-        )
+        language="python",
+        tokenizer="character",
+        chunk_size=max_chunk_size,
+        include_nodes=False,
+    )
     return chunker
+
 
 def byte_to_char_offset(raw: bytes, byte_offset: int) -> int:
     # Nombre de caracteres contenus dans les `byte_offset` premiers octets.
     return len(raw[:byte_offset].decode("utf-8", errors="ignore"))
 
 
-def chunk_to_data(chunk: Chunk, path: Path, raw: bytes | None = None) -> ChunkData:
+def chunk_to_data(
+    chunk: Chunk, path: Path, raw: bytes | None = None
+) -> ChunkData:
     start = chunk.start_index
     end = chunk.end_index
     if raw is not None:
@@ -59,10 +64,10 @@ def chunk_to_data(chunk: Chunk, path: Path, raw: bytes | None = None) -> ChunkDa
         start = byte_to_char_offset(raw, start)
         end = byte_to_char_offset(raw, end)
     return ChunkData(
-        file_path= str(path),
-        first_character_index= start,
-        last_character_index= end,
-        text= chunk.text,
+        file_path=str(path),
+        first_character_index=start,
+        last_character_index=end,
+        text=chunk.text,
     )
 
 
@@ -107,7 +112,8 @@ def build_index(root: Path, max_chunk_size: int = 2000) -> list[ChunkData]:
         for chunk in chunks:
             data = chunk_to_data(chunk, file)
             list_md.extend(split_oversized(data, max_chunk_size))
-    return(list_py + list_md)
+    return list_py + list_md
+
 
 # Un "mot" : lettres, chiffres et underscore. Tout le reste (ponctuation,
 # parentheses, points, retours a la ligne) est un separateur. C'est le point
@@ -159,21 +165,30 @@ def tokenize_corpus(chunks: list[ChunkData]) -> list[list[str]]:
     return result
 
 
-def build_bm25_index(chunks: list[ChunkData]) -> tuple[BM25Okapi, list[ChunkData]]:
+def build_bm25_index(
+    chunks: list[ChunkData],
+) -> tuple[BM25Okapi, list[ChunkData]]:
     tokenized = tokenize_corpus(chunks)
     # Un chunk sans aucun token (ponctuation seule, blancs) ne peut jamais
     # etre retrouve, et sa longueur nulle fait diviser BM25 par zero.
-    kept = [(tokens, chunk) for tokens, chunk in zip(tokenized, chunks) if tokens]
+    kept = [
+        (tokens, chunk)
+        for tokens, chunk in zip(tokenized, chunks)
+        if tokens
+    ]
     tokenized = [tokens for tokens, _ in kept]
     chunks = [chunk for _, chunk in kept]
     bm25 = BM25Okapi(tokenized, k1=BM25_K1, b=BM25_B)
     return (bm25, chunks)
 
+
 def save_index(bm25: BM25Okapi, chunks: list[ChunkData], path: Path) -> None:
     with open(path, "wb") as file:
         pickle.dump((bm25, chunks), file)
 
+
 def load_index(path: Path) -> tuple[BM25Okapi, list[ChunkData]]:
     with open(path, "rb") as file:
-        data = pickle.load(file)
-    return (data)
+        # pickle.load renvoie Any : on fixe le type attendu explicitement.
+        data: tuple[BM25Okapi, list[ChunkData]] = pickle.load(file)
+    return data

@@ -1,0 +1,3 @@
+[flake8]
+# Ne lint que notre code : ni l'environnement virtuel, ni le corpus vLLM.
+exclude = .venv,data,notes,__pycache__
