@@ -7,7 +7,7 @@ from .models import (
 )
 from rank_bm25 import BM25Okapi
 from tqdm import tqdm
-from .indexer import clean_text, STOPWORDS, remove_stopwords
+from .indexer import tokenize
 
 
 def load_questions(path: Path) -> RagDataset:
@@ -24,9 +24,8 @@ def load_search_results(path: Path) -> StudentSearchResults:
 
 
 def tokenize_query(question: str) -> list[str]:
-	tokens = remove_stopwords(clean_text(question).split(" "), STOPWORDS)
-	# "".split(" ") donne [""] : on ecarte les tokens vides.
-	return [token for token in tokens if token]
+	# Meme decoupage que le corpus, obligatoirement.
+	return tokenize(question)
 
 
 def search(question: str, bm25: BM25Okapi, chunks: list[ChunkData], k: int) -> list[ChunkData]:

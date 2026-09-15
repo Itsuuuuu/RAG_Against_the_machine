@@ -10,9 +10,12 @@ def collect_py_files(path: Path) -> list[Path]:
 
 
 def collect_md_files(path: Path) -> list[Path]:
+	# Les .txt sont du texte brut : meme strategie de decoupage que le
+	# Markdown. 3 % des sources docs de reference sont dans des .txt.
 	md_file_list = []
-	for file in path.rglob("*.md"):
-		md_file_list.append(file)
+	for pattern in ("*.md", "*.txt"):
+		for file in path.rglob(pattern):
+			md_file_list.append(file)
 	return md_file_list
 
 

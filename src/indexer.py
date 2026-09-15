@@ -11,10 +11,10 @@ from .parsing import (
 from tqdm import tqdm
 from rank_bm25 import BM25Okapi
 import pickle
-import string
+import re
 
 
-STOPWORDS = [
+STOPWORDS = frozenset([
     "a", "an", "the",
     "is", "are", "was", "were", "be", "been", "being",
     "do", "does", "did",
@@ -22,7 +22,7 @@ STOPWORDS = [
     "how", "what", "why", "when", "where", "which", "who",
     "to", "of", "in", "on", "at", "for", "with", "and", "or",
     "this", "that",
-    ]
+    ])
 
 def create_md_chunker(max_chunk_size: int):
     chunker = RecursiveChunker(
@@ -109,28 +109,64 @@ def build_index(root: Path, max_chunk_size: int = 2000) -> list[ChunkData]:
             list_md.extend(split_oversized(data, max_chunk_size))
     return(list_py + list_md)
 
+# Un "mot" : lettres, chiffres et underscore. Tout le reste (ponctuation,
+# parentheses, points, retours a la ligne) est un separateur. C'est le point
+# cle pour le code : `get_activation_formats(self)` doit donner le token
+# `get_activation_formats`, pas `getactivationformatsself`.
+WORD = re.compile(r"[A-Za-z0-9_]+")
+
+# Morceaux d'un identifiant camelCase : "FusedMoEActivationFormat" ->
+# ["Fused", "Mo", "E", "Activation", "Format"].
+CAMEL = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
+
+# Parametres BM25. b regle la normalisation par la longueur du document :
+# les chunks de code ont des longueurs tres variables, une normalisation
+# moderee (0.5 au lieu de 0.75) donne +2 a +4 pts de recall@5 sur le code
+# sans rien couter aux docs. k1 n'est pas discriminant sur nos datasets.
+BM25_K1 = 1.2
+BM25_B = 0.5
+
+
+def split_identifier(word: str) -> list[str]:
+    # snake_case puis camelCase : "fused_batched_moe" -> [fused, batched, moe]
+    parts = []
+    for piece in word.split("_"):
+        parts.extend(CAMEL.findall(piece))
+    return [part.lower() for part in parts if part]
+
+
+def tokenize(text: str) -> list[str]:
+    # Une seule fonction pour le corpus ET les questions : les deux doivent
+    # etre decoupes exactement de la meme facon pour que les tokens matchent.
+    # Chaque identifiant est indexe entier (pour les questions qui le citent
+    # verbatim) ET par sous-mots (pour celles qui le paraphrasent :
+    # "activation formats" vs `activation_formats`).
+    tokens = []
+    for word in WORD.findall(text):
+        lower = word.lower()
+        if lower not in STOPWORDS:
+            tokens.append(lower)
+        parts = split_identifier(word)
+        if len(parts) > 1:
+            tokens.extend(part for part in parts if part not in STOPWORDS)
+    return tokens
+
+
 def tokenize_corpus(chunks: list[ChunkData]) -> list[list[str]]:
     result = []
-    for chunk in chunks:
-        result.append(remove_stopwords(clean_text(chunk.text).split(" "), STOPWORDS))
+    for chunk in tqdm(chunks, desc="tokenizing"):
+        result.append(tokenize(chunk.text))
     return result
 
-def clean_text(text: str) -> str:
-    str_lower = text.lower()
-    table = str.maketrans("", "", string.punctuation)
-    cleaned_text = str_lower.translate(table)
-    return cleaned_text
-
-def remove_stopwords(tokens: list[str], stopwords: list[str]) -> list[str]:
-    result = []
-    for token in tokens:
-        if token not in stopwords:
-            result.append(token)
-    return result
 
 def build_bm25_index(chunks: list[ChunkData]) -> tuple[BM25Okapi, list[ChunkData]]:
     tokenized = tokenize_corpus(chunks)
-    bm25 = BM25Okapi(tokenized)
+    # Un chunk sans aucun token (ponctuation seule, blancs) ne peut jamais
+    # etre retrouve, et sa longueur nulle fait diviser BM25 par zero.
+    kept = [(tokens, chunk) for tokens, chunk in zip(tokenized, chunks) if tokens]
+    tokenized = [tokens for tokens, _ in kept]
+    chunks = [chunk for _, chunk in kept]
+    bm25 = BM25Okapi(tokenized, k1=BM25_K1, b=BM25_B)
     return (bm25, chunks)
 
 def save_index(bm25: BM25Okapi, chunks: list[ChunkData], path: Path) -> None:
