@@ -24,7 +24,3 @@ MYPY_FLAGS = --warn-return-any --warn-unused-ignores --ignore-missing-imports \
 lint:
 	uv run flake8 .
 	uv run mypy . $(MYPY_FLAGS)
-
-lint-strict:
-	uv run flake8 .
-	uv run mypy . --strict
