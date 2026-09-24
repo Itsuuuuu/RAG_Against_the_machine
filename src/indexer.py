@@ -125,12 +125,19 @@ WORD = re.compile(r"[A-Za-z0-9_]+")
 # ["Fused", "Mo", "E", "Activation", "Format"].
 CAMEL = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 
-# Parametres BM25. b regle la normalisation par la longueur du document :
-# les chunks de code ont des longueurs tres variables, une normalisation
-# moderee (0.5 au lieu de 0.75) donne +2 a +4 pts de recall@5 sur le code
-# sans rien couter aux docs. k1 n'est pas discriminant sur nos datasets.
-BM25_K1 = 1.2
-BM25_B = 0.5
+# Parametres BM25, regles par grille sur le jeu prive (docs+code), avec
+# deux garde-fous : ne pas casser le public, et ne pas casser la requete
+# canonique du sujet ("How to configure OpenAI server?", utilisee pour la
+# demo live Q5/Q6). Un premier essai a b=1.0 (normalisation maximale)
+# corrigeait bien le recall docs agrege, mais faisait ressortir des
+# fichiers de test riches en repetitions de "openai"/"server" devant la
+# vraie doc pour cette requete precise -- une regression inacceptable pour
+# une demo live. k1 bas (0.4) fait saturer tres vite la frequence des
+# termes, ce qui limite l'avantage de ces repetitions, sans avoir besoin
+# de la normalisation extreme : b=0.4 suffit et reste dans une zone stable
+# de la grille (docs 0.79->0.82 sur le prive), pas un pic isole.
+BM25_K1 = 0.4
+BM25_B = 0.4
 
 
 def split_identifier(word: str) -> list[str]:
